@@ -1,6 +1,7 @@
 package de.seuhd.campuscoffee.domain.ports.api;
 
 import de.seuhd.campuscoffee.domain.model.objects.Review;
+import de.seuhd.campuscoffee.domain.model.objects.User;
 import de.seuhd.campuscoffee.domain.ports.data.ReviewDataService;
 import org.jspecify.annotations.NonNull;
 
@@ -36,4 +37,5 @@ public interface ReviewService extends CrudService<Review, Long> {
      * @return the updated review with incremented approval count
      */
     @NonNull Review approve(@NonNull Review review, @NonNull Long userId);
+    @NonNull Review getByAuthor(@NonNull User authorAsUser);
 }

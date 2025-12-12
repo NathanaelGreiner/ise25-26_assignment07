@@ -5,6 +5,7 @@ import de.seuhd.campuscoffee.data.mapper.PosEntityMapper;
 import de.seuhd.campuscoffee.data.mapper.ReviewEntityMapper;
 import de.seuhd.campuscoffee.data.mapper.UserEntityMapper;
 import de.seuhd.campuscoffee.data.persistence.entities.ReviewEntity;
+import de.seuhd.campuscoffee.data.persistence.entities.UserEntity;
 import de.seuhd.campuscoffee.data.persistence.repositories.ReviewRepository;
 import de.seuhd.campuscoffee.domain.model.objects.Pos;
 import de.seuhd.campuscoffee.domain.model.objects.Review;
@@ -45,5 +46,15 @@ public class ReviewDataServiceImpl
                 .stream()
                 .map(mapper::fromEntity)
                 .toList();
+    }
+
+    @Override
+    @NonNull
+    public Review getByAuthor(@NonNull User authorAsUser) {
+        return findByFieldOrThrow(
+                () -> repository.findByAuthor(authorAsUser),
+                UserEntity.LOGIN_NAME_COLUMN,
+                "author"
+        );
     }
 }

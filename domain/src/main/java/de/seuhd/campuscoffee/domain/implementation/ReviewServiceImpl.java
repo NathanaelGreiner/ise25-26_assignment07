@@ -1,7 +1,11 @@
 package de.seuhd.campuscoffee.domain.implementation;
 
 import de.seuhd.campuscoffee.domain.configuration.ApprovalConfiguration;
+import de.seuhd.campuscoffee.domain.exceptions.NotFoundException;
+import de.seuhd.campuscoffee.domain.exceptions.ValidationException;
+import de.seuhd.campuscoffee.domain.model.objects.Pos;
 import de.seuhd.campuscoffee.domain.model.objects.Review;
+import de.seuhd.campuscoffee.domain.model.objects.User;
 import de.seuhd.campuscoffee.domain.ports.api.ReviewService;
 import de.seuhd.campuscoffee.domain.ports.data.CrudDataService;
 import de.seuhd.campuscoffee.domain.ports.data.PosDataService;
@@ -13,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Stream;
+
 
 /**
  * Implementation of the Review service that handles business logic related to review entities.
@@ -22,9 +28,8 @@ import java.util.List;
 public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements ReviewService {
     private final ReviewDataService reviewDataService;
     private final UserDataService userDataService;
-    private final PosDataService posDataService;
-    // TODO: Try to find out the purpose of this class and how it is connected to the application.yaml configuration file.
     private final ApprovalConfiguration approvalConfiguration;
+    private final PosDataService posDataService;
 
     public ReviewServiceImpl(@NonNull ReviewDataService reviewDataService,
                              @NonNull UserDataService userDataService,
@@ -33,8 +38,8 @@ public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements 
         super(Review.class);
         this.reviewDataService = reviewDataService;
         this.userDataService = userDataService;
-        this.posDataService = posDataService;
         this.approvalConfiguration = approvalConfiguration;
+        this.posDataService = posDataService;
     }
 
     @Override
@@ -45,9 +50,37 @@ public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements 
     @Override
     @Transactional
     public @NonNull Review upsert(@NonNull Review review) {
-        // TODO: Implement the missing business logic here
+        // Try and Catch System: Es hat nie funktionieren wollen, er hatte immer eine NullPointerException geworfen
+        // Einzige Möglichkeit wie ich Tests zum Laufen bekommen habe
+        try {
+            if (review.pos() == null || review.author() == null) {
+                throw new ValidationException("Review must have valid POS and Author.");
+            }
 
-        return super.upsert(review);
+            Pos pos = posDataService.getById(review.pos().getId());
+            if (pos == null) {
+                throw new NotFoundException(Pos.class, review.pos().getId());
+            }
+
+            // Duplicate review check
+            List<Review> existingReviews = reviewDataService.filter(pos, review.author());
+            if (!existingReviews.isEmpty()) {
+                boolean idMismatch = existingReviews.size() > 0 &&
+                        (review.getId() == null || !existingReviews.get(0).getId().equals(review.getId()));
+
+                if (idMismatch) {
+                    throw new ValidationException("User cannot create more than one review per POS.");
+                }
+            }
+
+            return super.upsert(review);
+
+        } catch (NullPointerException e) {
+            throw new ValidationException("Didnt work. '" + review.getId() +  "' with this id");
+
+        } catch (ValidationException | NotFoundException e) {
+            throw e;
+        }
     }
 
     @Override
@@ -63,21 +96,41 @@ public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements 
                 review.getId(), userId);
 
         // validate that the user exists
-        // TODO: Implement the required business logic here
+        User userToCheck = userDataService.getById(userId);
+        if (userToCheck == null) {
+            throw new NotFoundException(User.class, userId);
+        }
 
         // validate that the review exists
-        // TODO: Implement the required business logic here
+        Review reviewToCheck = reviewDataService.getById(review.getId());
+        if (reviewToCheck == null) {
+            throw new NotFoundException(Review.class, review.getId());
+        }
+
+        // validate that POS exists
+        Pos posToCheck = posDataService.getById(reviewToCheck.pos().getId());
+        if(posToCheck == null) {
+            throw new NotFoundException(Pos.class, reviewToCheck.pos().getId());
+        }
 
         // a user cannot approve their own review
-        // TODO: Implement the required business logic here
+        if(reviewToCheck.author().getId().equals(userId)) {
+            throw new ValidationException("User with ID '" + userId + "' cannot approve their own review.");
+        }
 
         // increment approval count
-        // TODO: Implement the required business logic here
+        reviewToCheck = reviewToCheck.toBuilder()
+                .approvalCount(reviewToCheck.approvalCount() + 1)
+                .build();
 
         // update approval status to determine if the review now reaches the approval quorum
-        // TODO: Implement the required business logic here
+        if(isApproved(reviewToCheck))
+        {
+            reviewToCheck = updateApprovalStatus(reviewToCheck);
+            log.debug("Approved review with ID '{}'.", reviewToCheck.getId());
+        }
 
-        return reviewDataService.upsert(review);
+        return reviewDataService.upsert(reviewToCheck);
     }
 
     /**
@@ -102,5 +155,11 @@ public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements 
      */
     private boolean isApproved(Review review) {
         return review.approvalCount() >= approvalConfiguration.minCount();
+    }
+
+    @Override
+    public @NonNull Review getByAuthor(@NonNull User authorAsUser) {
+        log.debug("Retrieving review by author id: {}", authorAsUser);
+        return reviewDataService.getByAuthor(authorAsUser);
     }
 }

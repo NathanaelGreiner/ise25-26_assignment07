@@ -34,4 +34,6 @@ public interface ReviewDataService extends CrudDataService<Review, Long> {
      * @return          a list of reviews for the specified point of sale and author
      */
     @NonNull List<Review> filter(@NonNull Pos pos, @NonNull User author);
+
+    @NonNull Review getByAuthor(@NonNull User authorAsUser);
 }

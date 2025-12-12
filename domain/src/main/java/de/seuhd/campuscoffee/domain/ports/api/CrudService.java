@@ -59,4 +59,5 @@ public interface CrudService<DOMAIN extends DomainModel<ID>, ID> {
      * @throws NotFoundException if no object exists with the given ID
      */
     void delete(@NonNull ID id);
+
 }
